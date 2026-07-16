@@ -13,6 +13,7 @@ RUN apt-get update \
 COPY --chown=coder:coder package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 
 # Copy only the packages worker-backend depends on
+COPY --chown=coder:coder packages/typescript-config /home/coder/packages/typescript-config
 COPY --chown=coder:coder packages/db /home/coder/packages/db
 COPY --chown=coder:coder packages/common /home/coder/packages/common
 COPY --chown=coder:coder apps/worker-backend /home/coder/apps/worker-backend
