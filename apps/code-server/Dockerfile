@@ -14,7 +14,7 @@ WORKDIR /home/coder/worker-backend
 RUN npm install && npm run build
 
 # Copy startup script
-COPY start.sh /home/coder/start.sh
+COPY code-server/start.sh /home/coder/start.sh
 RUN chmod +x /home/coder/start.sh
 
 USER coder
