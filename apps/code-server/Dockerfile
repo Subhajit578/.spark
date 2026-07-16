@@ -34,6 +34,9 @@ RUN pnpm --filter @repo/db build && \
 
 USER coder
 
+RUN mkdir -p /home/coder/.config/code-server && \
+    echo "auth: none" > /home/coder/.config/code-server/config.yaml
+
 EXPOSE 8080 3001 5173
 
 CMD ["/home/coder/start.sh"]

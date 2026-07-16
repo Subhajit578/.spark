@@ -61,7 +61,7 @@ async function refreshInstances() {
         if (instance.InstanceId && !knownIds.has(instance.InstanceId)) {
             ALL_MACHINES.push({
                 instanceId: instance.InstanceId,
-                ip: instance.PrivateIpAddress ?? "",
+                ip: instance.PublicIpAddress ?? "",
                 isUsed: false
             })
             console.log(`Added new machine: ${instance.InstanceId}`)
