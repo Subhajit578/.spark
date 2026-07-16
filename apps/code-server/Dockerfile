@@ -23,10 +23,10 @@ RUN chmod +x /home/coder/start.sh
 
 WORKDIR /home/coder
 
-# Install dependencies using pnpm workspaces
-RUN pnpm install --filter worker-backend...
+# Install all dependencies (includes devDeps needed for tsc)
+RUN pnpm install
 
-# Build
+# Build in dependency order
 RUN pnpm --filter @repo/db build && \
     pnpm --filter @repo/common build && \
     pnpm --filter backend build
