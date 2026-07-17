@@ -37,6 +37,7 @@ export async function handleShellCommand(shellCommand:string, projectId: string)
             const isDevServer = command.trim().startsWith('npm run dev') || command.trim().startsWith('npm start') || command.trim().startsWith('npx vite')
     
             if (isDevServer) {
+                try { ChildProcess.execSync('npm install', { cwd: projectDir }) } catch {}
                 ChildProcess.spawn(command.trim(), {
                     cwd: projectDir,
                     shell: true,
