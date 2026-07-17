@@ -39,4 +39,4 @@ RUN mkdir -p /home/coder/.config/code-server && \
 
 EXPOSE 8080 3001 5173
 
-CMD ["/home/coder/start.sh"]
+ENTRYPOINT ["/home/coder/start.sh"]

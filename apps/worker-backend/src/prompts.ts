@@ -201,7 +201,7 @@ Here are some examples of correct usage of artifacts:
         </boltAction>
 
         <boltAction type="shell">
-          npm run dev
+          npm run dev -- --host
         </boltAction>
       </boltArtifact>
 
@@ -258,7 +258,7 @@ Here are some examples of correct usage of artifacts:
         </boltAction>
 
         <boltAction type="shell">
-          npm run dev
+          npm run dev -- --host
         </boltAction>
       </boltArtifact>
 

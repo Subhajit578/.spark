@@ -34,7 +34,7 @@ export async function handleShellCommand(shellCommand:string, projectId: string)
     for (const command of commands) {
         console.log("Command ", command)
         try {
-            const isDevServer = command.trim().startsWith('npm run dev') || command.trim().startsWith('npm start')
+            const isDevServer = command.trim().startsWith('npm run dev') || command.trim().startsWith('npm start') || command.trim().startsWith('npx vite')
     
             if (isDevServer) {
                 ChildProcess.spawn(command.trim(), {
