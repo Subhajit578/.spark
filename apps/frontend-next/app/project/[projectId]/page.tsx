@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Send, Sparkles, CheckCircle, Loader2, Code2, Globe, Monitor } from 'lucide-react'
+import { ArrowLeft, Send, Sparkles, CheckCircle, Loader2, Code2, Globe, Monitor, Download } from 'lucide-react'
 import { useActions } from '@/hooks/useActions'
 import { usePrompts } from '@/hooks/usePrompts'
 import { api } from '@/lib/api'
@@ -81,6 +81,16 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Generating...
             </span>
+          )}
+          {isDone && machineIp && (
+            <a
+              href={`http://${machineIp}:3001/v1/files/${projectId}/download`}
+              download="project.zip"
+              className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-700"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
           )}
         </div>
       </header>
@@ -181,13 +191,15 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
                 <iframe
                   key={`editor-${machineIp}`}
                   src={`http://${machineIp}:8080`}
-                  className={`absolute inset-0 h-full w-full border-0 ${activeTab === 'editor' ? 'block' : 'hidden'}`}
+                  className="absolute inset-0 h-full w-full border-0"
+                  style={{ zIndex: activeTab === 'editor' ? 1 : 0 }}
                   title="Code Editor"
                 />
                 <iframe
                   key={`preview-${machineIp}`}
                   src={`http://${machineIp}:5173`}
-                  className={`absolute inset-0 h-full w-full border-0 ${activeTab === 'preview' ? 'block' : 'hidden'}`}
+                  className="absolute inset-0 h-full w-full border-0"
+                  style={{ zIndex: activeTab === 'preview' ? 1 : 0 }}
                   title="Live Preview"
                 />
               </>

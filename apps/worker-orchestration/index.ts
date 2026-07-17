@@ -26,7 +26,7 @@ type Machine = {
 }
 
 const ALL_MACHINES: Machine[] = []
-const DESIRED_IDLE_BUFFER = 5
+const DESIRED_IDLE_BUFFER = 1
 
 async function refreshInstances() {
     const command = new DescribeAutoScalingInstancesCommand();

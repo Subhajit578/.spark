@@ -12,6 +12,7 @@ import { handleFileUpdate, handleShellCommand, getProjectDir } from './os';
 import { WORK_DIR } from './constants';
 import fs from 'fs';
 import path from 'path';
+import ChildProcess from 'node:child_process';
 const client = new Anthropic();
 const app = express()
 app.use(cors())
@@ -215,6 +216,16 @@ app.get("/v1/files/:projectId", (req, res) => {
     const projectDir = getProjectDir(req.params.projectId)
     if (!fs.existsSync(projectDir)) return res.json({ files: [] })
     res.json({ files: buildFileTree(projectDir, projectDir) })
+})
+
+app.get("/v1/files/:projectId/download", (req, res) => {
+    const projectDir = getProjectDir(req.params.projectId)
+    if (!fs.existsSync(projectDir)) return res.status(404).json({ message: "Project not found" })
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="project.zip"`)
+    const zip = ChildProcess.spawn('zip', ['-r', '-', '.'], { cwd: projectDir })
+    zip.stdout.pipe(res)
+    zip.stderr.on('data', (d) => console.error(d.toString()))
 })
 
 app.get("/v1/files/:projectId/content", (req, res) => {

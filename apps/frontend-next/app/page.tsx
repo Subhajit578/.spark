@@ -37,7 +37,6 @@ export default function LandingPage() {
     try {
       const res = await api.createProject(trimmed)
       const { projectId } = res.data
-      api.sendPrompt(projectId, trimmed)
       router.push(`/project/${projectId}`)
     } catch {
       setLoading(false)

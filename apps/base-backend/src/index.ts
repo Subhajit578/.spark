@@ -67,6 +67,22 @@ app.post("/v1/signin", async (req, res) => {
     }
 })
 //TODO 3: Create a Project EndPoint
+async function assignMachine(projectId: string, prompt: string) {
+    for (let i = 0; i < 30; i++) {
+        try {
+            const response = await axios.get(`http://localhost:3003/${projectId}`)
+            const machineIp = response.data.ip
+            await prismaClient.project.update({ where: { id: projectId }, data: { machineIp } })
+            await axios.post(`http://${machineIp}:3001/v1/prompt`, { projectId, prompt })
+            console.log(`Machine assigned and prompt sent to ${projectId}: ${machineIp}`)
+            return
+        } catch {
+            await new Promise(r => setTimeout(r, 10000))
+        }
+    }
+    console.log(`Failed to assign machine to ${projectId}`)
+}
+
 app.post("/v1/projects", authMiddleware, async (req, res) => {
     const {prompt} = req.body
     const userId = req.userId!
@@ -75,13 +91,7 @@ app.post("/v1/projects", authMiddleware, async (req, res) => {
         const project = await prismaClient.project.create({
             data : {description, userId}
         })
-        try {
-            const response = await axios.get(`http://localhost:3003/${project.id}`,{data : { projectId: project.id
-            }})
-            await prismaClient.project.update({where :{id :project.id}, data: { machineIp: response.data.ip }})
-        } catch (err) {
-            console.log("No idle machine available yet")
-        }
+        assignMachine(project.id, prompt).catch(console.error)
         res.json({projectId : project.id})
     } catch (err) {
         console.log(err)
