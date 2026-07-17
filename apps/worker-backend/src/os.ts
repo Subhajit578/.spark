@@ -38,7 +38,7 @@ export async function handleShellCommand(shellCommand:string, projectId: string)
     
             if (isDevServer) {
                 try { ChildProcess.execSync('npm install', { cwd: projectDir }) } catch {}
-                ChildProcess.spawn(command.trim(), {
+                ChildProcess.spawn('npx vite --host 0.0.0.0 --port 5173', {
                     cwd: projectDir,
                     shell: true,
                     detached: true,
