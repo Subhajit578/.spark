@@ -22,11 +22,24 @@ type Machine = {
     instanceId: string,
     ip: string,
     isUsed: boolean,
-    assignedProject?: string
+    assignedProject?: string,
+    assignedAt?: number
 }
 
 const ALL_MACHINES: Machine[] = []
-const DESIRED_IDLE_BUFFER = 0
+const DESIRED_IDLE_BUFFER = 1
+const MAX_MACHINE_AGE_MS = 30 * 60 * 1000 // 30 minutes
+
+async function terminateMachine(instanceId: string) {
+    const command = new TerminateInstanceInAutoScalingGroupCommand({
+        InstanceId: instanceId,
+        ShouldDecrementDesiredCapacity: true
+    })
+    await client.send(command)
+    const idx = ALL_MACHINES.findIndex(m => m.instanceId === instanceId)
+    if (idx !== -1) ALL_MACHINES.splice(idx, 1)
+    console.log(`Auto-terminated machine: ${instanceId}`)
+}
 
 async function refreshInstances() {
     const command = new DescribeAutoScalingInstancesCommand();
@@ -35,6 +48,11 @@ async function refreshInstances() {
     const instanceIds = data.AutoScalingInstances
         ?.map(x => x.InstanceId)
         .filter((id): id is string => id !== undefined) ?? []
+
+    if (instanceIds.length === 0) {
+        ALL_MACHINES.length = 0
+        return
+    }
 
     const ec2InstanceCommand = new DescribeInstancesCommand({
         InstanceIds: instanceIds
@@ -71,38 +89,63 @@ async function refreshInstances() {
 
 async function ensureCapacity() {
     const idleCount = ALL_MACHINES.filter(x => !x.isUsed).length
+    const needed = Math.max(0, DESIRED_IDLE_BUFFER - idleCount)
+    if (needed === 0) return
     const command = new SetDesiredCapacityCommand({
         AutoScalingGroupName: "vscode-asg",
-        DesiredCapacity: ALL_MACHINES.length + Math.max(0, DESIRED_IDLE_BUFFER - idleCount)
+        DesiredCapacity: ALL_MACHINES.length + needed
     })
     await client.send(command)
+    console.log(`Scaling up by ${needed} (total: ${ALL_MACHINES.length + needed})`)
 }
 
-refreshInstances().catch(console.error)
+// Auto-terminate machines that have been in use too long
+async function cleanupStaleMachines() {
+    const now = Date.now()
+    for (const machine of [...ALL_MACHINES]) {
+        if (machine.isUsed && machine.assignedAt && (now - machine.assignedAt) > MAX_MACHINE_AGE_MS) {
+            console.log(`Machine ${machine.instanceId} exceeded ${MAX_MACHINE_AGE_MS / 60000}min, terminating`)
+            await terminateMachine(machine.instanceId).catch(console.error)
+        }
+    }
+    // After cleanup, ensure buffer is maintained
+    await ensureCapacity().catch(console.error)
+}
+
+refreshInstances().then(() => ensureCapacity()).catch(console.error)
+
 setInterval(() => {
     refreshInstances().catch(console.error)
 }, 10 * 1000)
+
+setInterval(() => {
+    cleanupStaleMachines().catch(console.error)
+}, 60 * 1000)
 
 app.get("/:projectId", async (req, res) => {
     const idleMachine = ALL_MACHINES.find(x => x.isUsed === false);
 
     if (!idleMachine) {
-        // No idle machine right now — scale up so future requests succeed
-        ensureCapacity().catch(err => console.error("Scale-up failed:", err))
+        // No idle machine — trigger scale-up and ask client to retry
+        const scaleUp = new SetDesiredCapacityCommand({
+            AutoScalingGroupName: "vscode-asg",
+            DesiredCapacity: ALL_MACHINES.length + 1
+        })
+        client.send(scaleUp).catch(err => console.error("Scale-up failed:", err))
         res.status(404).send("No idle machine found, scaling up");
         return;
     }
 
     idleMachine.isUsed = true;
     idleMachine.assignedProject = req.params.projectId;
+    idleMachine.assignedAt = Date.now();
 
-    // Top up the buffer since we just consumed one idle machine.
-    // Scaling failure doesn't invalidate the machine we already assigned,
-    // so don't fail the response over it.
-    ensureCapacity().catch(err => console.error("Scale-up failed:", err))
+    // Replenish the idle buffer
+    ensureCapacity().catch(err => console.error("ensureCapacity failed:", err))
 
     res.send({
-        ip: idleMachine.ip
+        ip: idleMachine.ip,
+        instanceId: idleMachine.instanceId
     });
 })
 
@@ -114,15 +157,9 @@ app.post("/destroy", async (req, res) => {
         return
     }
 
-    const command = new TerminateInstanceInAutoScalingGroupCommand({
-        InstanceId: machineId,
-        ShouldDecrementDesiredCapacity: true
-    })
-
     try {
-        await client.send(command)
-        const idx = ALL_MACHINES.findIndex(m => m.instanceId === machineId)
-        if (idx !== -1) ALL_MACHINES.splice(idx, 1)
+        await terminateMachine(machineId)
+        await ensureCapacity()
         res.send({ success: true })
     } catch (err) {
         console.error(err)
