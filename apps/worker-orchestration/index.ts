@@ -27,8 +27,43 @@ type Machine = {
 }
 
 const ALL_MACHINES: Machine[] = []
+const PENDING_HEALTH_CHECK = new Set<string>() // instanceIds currently being health-checked
 const DESIRED_IDLE_BUFFER = 1
 const MAX_MACHINE_AGE_MS = 30 * 60 * 1000 // 30 minutes
+
+async function isHealthy(ip: string): Promise<boolean> {
+    try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 3000)
+        await fetch(`http://${ip}:3001/`, { signal: controller.signal })
+        clearTimeout(timeout)
+        return true
+    } catch {
+        return false
+    }
+}
+
+async function waitUntilHealthy(instanceId: string, ip: string) {
+    const maxWaitMs = 5 * 60 * 1000 // give up after 5 minutes
+    const intervalMs = 10 * 1000
+    const start = Date.now()
+
+    console.log(`Health-checking machine ${instanceId} (${ip})...`)
+
+    while (Date.now() - start < maxWaitMs) {
+        if (await isHealthy(ip)) {
+            PENDING_HEALTH_CHECK.delete(instanceId)
+            ALL_MACHINES.push({ instanceId, ip, isUsed: false })
+            console.log(`Machine ${instanceId} (${ip}) is ready, added to pool`)
+            ensureCapacity().catch(console.error)
+            return
+        }
+        await new Promise(r => setTimeout(r, intervalMs))
+    }
+
+    console.log(`Machine ${instanceId} never became healthy after 5min, skipping`)
+    PENDING_HEALTH_CHECK.delete(instanceId)
+}
 
 async function terminateMachine(instanceId: string) {
     const command = new TerminateInstanceInAutoScalingGroupCommand({
@@ -51,6 +86,7 @@ async function refreshInstances() {
 
     if (instanceIds.length === 0) {
         ALL_MACHINES.length = 0
+        PENDING_HEALTH_CHECK.clear()
         return
     }
 
@@ -65,7 +101,7 @@ async function refreshInstances() {
 
     const liveIds = new Set(liveInstances.map(i => i.InstanceId))
 
-    // Remove dead machines (no longer in the live set)
+    // Remove dead machines from pool
     for (let i = ALL_MACHINES.length - 1; i >= 0; i--) {
         if (!liveIds.has(ALL_MACHINES[i]!.instanceId)) {
             console.log(`Removing dead machine: ${ALL_MACHINES[i]!.instanceId}`)
@@ -73,33 +109,46 @@ async function refreshInstances() {
         }
     }
 
-    // Add newly seen machines
-    const knownIds = new Set(ALL_MACHINES.map(m => m.instanceId))
-    for (const instance of liveInstances) {
-        if (instance.InstanceId && !knownIds.has(instance.InstanceId)) {
-            ALL_MACHINES.push({
-                instanceId: instance.InstanceId,
-                ip: instance.PublicIpAddress ?? "",
-                isUsed: false
-            })
-            console.log(`Added new machine: ${instance.InstanceId}`)
+    // Cancel health checks for terminated instances
+    for (const pendingId of PENDING_HEALTH_CHECK) {
+        if (!liveIds.has(pendingId)) {
+            console.log(`Pending machine ${pendingId} terminated, removing from health-check queue`)
+            PENDING_HEALTH_CHECK.delete(pendingId)
         }
+    }
+
+    // Queue health checks for newly discovered machines
+    const knownIds = new Set([
+        ...ALL_MACHINES.map(m => m.instanceId),
+        ...PENDING_HEALTH_CHECK
+    ])
+
+    for (const instance of liveInstances) {
+        const id = instance.InstanceId
+        const ip = instance.PublicIpAddress
+
+        if (!id || !ip) continue // skip if no public IP yet (still booting)
+        if (knownIds.has(id)) continue
+
+        PENDING_HEALTH_CHECK.add(id)
+        waitUntilHealthy(id, ip).catch(console.error) // non-blocking
     }
 }
 
 async function ensureCapacity() {
     const idleCount = ALL_MACHINES.filter(x => !x.isUsed).length
-    const needed = Math.max(0, DESIRED_IDLE_BUFFER - idleCount)
+    const pendingCount = PENDING_HEALTH_CHECK.size
+    // Count pending machines toward the buffer so we don't over-provision
+    const needed = Math.max(0, DESIRED_IDLE_BUFFER - idleCount - pendingCount)
     if (needed === 0) return
     const command = new SetDesiredCapacityCommand({
         AutoScalingGroupName: "vscode-asg",
-        DesiredCapacity: ALL_MACHINES.length + needed
+        DesiredCapacity: ALL_MACHINES.length + pendingCount + needed
     })
     await client.send(command)
-    console.log(`Scaling up by ${needed} (total: ${ALL_MACHINES.length + needed})`)
+    console.log(`Scaling up by ${needed}`)
 }
 
-// Auto-terminate machines that have been in use too long
 async function cleanupStaleMachines() {
     const now = Date.now()
     for (const machine of [...ALL_MACHINES]) {
@@ -108,7 +157,6 @@ async function cleanupStaleMachines() {
             await terminateMachine(machine.instanceId).catch(console.error)
         }
     }
-    // After cleanup, ensure buffer is maintained
     await ensureCapacity().catch(console.error)
 }
 
@@ -123,30 +171,28 @@ setInterval(() => {
 }, 60 * 1000)
 
 app.get("/:projectId", async (req, res) => {
-    const idleMachine = ALL_MACHINES.find(x => x.isUsed === false);
+    const idleMachine = ALL_MACHINES.find(x => !x.isUsed)
 
     if (!idleMachine) {
-        // No idle machine — trigger scale-up and ask client to retry
         const scaleUp = new SetDesiredCapacityCommand({
             AutoScalingGroupName: "vscode-asg",
-            DesiredCapacity: ALL_MACHINES.length + 1
+            DesiredCapacity: ALL_MACHINES.length + PENDING_HEALTH_CHECK.size + 1
         })
         client.send(scaleUp).catch(err => console.error("Scale-up failed:", err))
-        res.status(404).send("No idle machine found, scaling up");
-        return;
+        res.status(404).send("No idle machine found, scaling up")
+        return
     }
 
-    idleMachine.isUsed = true;
-    idleMachine.assignedProject = req.params.projectId;
-    idleMachine.assignedAt = Date.now();
+    idleMachine.isUsed = true
+    idleMachine.assignedProject = req.params.projectId
+    idleMachine.assignedAt = Date.now()
 
-    // Replenish the idle buffer
     ensureCapacity().catch(err => console.error("ensureCapacity failed:", err))
 
     res.send({
         ip: idleMachine.ip,
         instanceId: idleMachine.instanceId
-    });
+    })
 })
 
 app.post("/destroy", async (req, res) => {
