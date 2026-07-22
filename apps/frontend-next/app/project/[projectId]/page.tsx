@@ -84,7 +84,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
           )}
           {isDone && machineIp && (
             <a
-              href={`http://${machineIp}:3001/v1/files/${projectId}/download`}
+              href={`https://api-${machineIp.replace(/\./g, '-')}.spark.subhajitdev.site/v1/files/${projectId}/download`}
               download="project.zip"
               className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-700"
             >

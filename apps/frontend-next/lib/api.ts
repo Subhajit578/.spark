@@ -30,7 +30,7 @@ export const api = {
     axios.post(`${WORKER_URL}/v1/prompt`, { projectId, prompt }),
 
   sendPromptToMachine: (projectId: string, prompt: string, machineIp: string) =>
-    axios.post(`http://${machineIp}:3001/v1/prompt`, { projectId, prompt }),
+    axios.post(`https://api-${machineIp.replace(/\./g, '-')}.spark.subhajitdev.site/v1/prompt`, { projectId, prompt }),
 
   getFiles: (projectId: string) =>
     axios.get(`${WORKER_URL}/v1/files/${projectId}`),
