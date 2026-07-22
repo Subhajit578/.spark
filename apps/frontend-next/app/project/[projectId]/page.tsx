@@ -196,7 +196,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
                   title="Code Editor"
                 />
                 <iframe
-                  key={`preview-${machineIp}`}
+                  key={`preview-${machineIp}-${isDone}`}
                   src={`http://${machineIp}:5173`}
                   className="absolute inset-0 h-full w-full border-0"
                   style={{ zIndex: activeTab === 'preview' ? 1 : 0 }}
