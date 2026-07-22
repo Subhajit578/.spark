@@ -169,8 +169,8 @@ app.post("/v1/prompt", async (req, res) => {
             content : p.content,
         })), 
         system: getSystemPrompt(WORK_DIR),
-        model:"claude-haiku-4-5-20251001", 
-        max_tokens : 8000,
+        model:"claude-haiku-4-5-20251001",
+        max_tokens : 16000,
     })
     .on('text', (text) => {
         artifactProcessor.append(text)
