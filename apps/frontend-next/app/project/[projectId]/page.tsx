@@ -190,14 +190,14 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
               <>
                 <iframe
                   key={`editor-${machineIp}`}
-                  src={`http://${machineIp}:8080`}
+                  src={`https://editor-${machineIp.replace(/\./g, '-')}.spark.subhajitdev.site`}
                   className="absolute inset-0 h-full w-full border-0"
                   style={{ zIndex: activeTab === 'editor' ? 1 : 0 }}
                   title="Code Editor"
                 />
                 <iframe
                   key={`preview-${machineIp}-${isDone}`}
-                  src={`http://${machineIp}:5173`}
+                  src={`https://preview-${machineIp.replace(/\./g, '-')}.spark.subhajitdev.site`}
                   className="absolute inset-0 h-full w-full border-0"
                   style={{ zIndex: activeTab === 'preview' ? 1 : 0 }}
                   title="Live Preview"
