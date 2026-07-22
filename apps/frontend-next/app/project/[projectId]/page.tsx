@@ -20,6 +20,14 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
 
   const { actions, isDone } = useActions(projectId)
   const { prompts, machineIp } = usePrompts(projectId)
+  const [previewReady, setPreviewReady] = useState(false)
+
+  useEffect(() => {
+    if (isDone && machineIp) {
+      const timer = setTimeout(() => setPreviewReady(true), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [isDone, machineIp])
 
   useEffect(() => {
     if (!isAuthenticated()) router.push('/signin')
@@ -196,7 +204,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
                   title="Code Editor"
                 />
                 <iframe
-                  key={`preview-${machineIp}-${isDone}`}
+                  key={`preview-${machineIp}-${previewReady}`}
                   src={`https://preview-${machineIp.replace(/\./g, '-')}.spark.subhajitdev.site`}
                   className="absolute inset-0 h-full w-full border-0"
                   style={{ zIndex: activeTab === 'preview' ? 1 : 0 }}
