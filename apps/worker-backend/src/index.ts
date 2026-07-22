@@ -153,8 +153,14 @@ app.post("/v1/prompt", async (req, res) => {
             createdAt : "asc"
         }
     })
+    let devServerStarted = false
     let artifactProcessor = new ArtifactProcessor("", (filePath, fileContent) => handleFileUpdate(filePath, fileContent, projectId), (shellCommand) => {
         handleShellCommand(shellCommand, projectId)
+        const cmds = shellCommand.split("&&")
+        if (cmds.some(c => {
+            const t = c.trim()
+            return t.startsWith('npm run dev') || t.startsWith('npm start') || t.startsWith('npx vite')
+        })) devServerStarted = true
     })
     let artifact =""
     let response = client.messages.stream({
@@ -185,10 +191,21 @@ app.post("/v1/prompt", async (req, res) => {
 
         await prismaClient.actions.create({
             data : {
-                content: "Done!", 
+                content: "Done!",
                 projectId
             }
         })
+
+        if (!devServerStarted) {
+            const projectDir = getProjectDir(projectId)
+            if (fs.existsSync(path.join(projectDir, 'package.json'))) {
+                ChildProcess.spawn('bash', ['-c', 'npm install && npx vite --host 0.0.0.0 --port 5173'], {
+                    cwd: projectDir,
+                    detached: true,
+                    stdio: 'ignore'
+                }).unref()
+            }
+        }
     })
     .on('error', (error) => {
         console.log("error", error)
